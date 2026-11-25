@@ -93,6 +93,42 @@ await scenario('imagem + áudio → mp4 512x512 de 2 s', async () => {
   checkSquareWithAudio(info, 2);
 });
 
+await scenario('cancelar no meio da geração para e permite gerar de novo', async () => {
+  await page.$eval('#duration', (e) => { e.value = '5'; e.dispatchEvent(new Event('input')); });
+  await page.click('#generate-btn');
+  await page.waitForSelector('#cancel-btn:not([hidden])', { timeout: 60000 });
+  await page.click('#cancel-btn');
+  await page.waitForFunction(() => document.querySelector('#status').textContent === 'Cancelado.', null, { timeout: 15000 });
+  assert.equal(await page.isHidden('#alert'), true, 'cancelar não é erro');
+  assert.equal(await page.isDisabled('#generate-btn'), false);
+  // o motor foi descartado; a próxima geração recarrega e funciona
+  await page.$eval('#duration', (e) => { e.value = '1'; e.dispatchEvent(new Event('input')); });
+  const { info } = await generateAndDownload('after-cancel.mp4');
+  checkSquareWithAudio(info, 1);
+});
+
+await scenario('timeout do motor gera erro claro e descarta a instância', async () => {
+  const r = await page.evaluate(async () => {
+    const { FfmpegEngine } = await import('/js/ffmpeg-engine.js');
+    const eng = new FfmpegEngine();
+    const pic = await (await fetch('/test/.tmp/e2e/pic.png')).blob();
+    const tone = await (await fetch('/test/.tmp/e2e/tone.ogg')).blob();
+    const args = ['-loop', '1', '-t', '5', '-i', eng.inputPath('v.png'), '-i', eng.inputPath('a.ogg'),
+      '-c:v', 'libx264', '-shortest', '-y', 'o.mp4'];
+    try {
+      await eng.run({ inputs: { 'v.png': pic, 'a.ogg': tone }, args, outputName: 'o.mp4', timeoutMs: 50 });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, msg: e.message, loaded: eng.loaded };
+    } finally {
+      eng.dispose();
+    }
+  });
+  assert.equal(r.ok, false);
+  assert.match(r.msg, /Tempo esgotado/);
+  assert.equal(r.loaded, false);
+});
+
 await scenario('corrida: vídeo (lento) e logo depois imagem (rápida) → vence a última escolha', async () => {
   await page.evaluate(() => {
     // dispara as duas escolhas sem esperar a primeira terminar de carregar
@@ -131,8 +167,8 @@ await scenario('escolha inválida limpa o estado (sem arquivo "fantasma")', asyn
 
 await page.screenshot({ path: join(dir, 'final.png'), fullPage: true });
 if (problems.length) {
-  // erros de console esperados: o Chromium de teste não toca H.264/AAC do resultado
-  console.log('mensagens de console/erros:\n  ' + problems.join('\n  '));
+  failed = true;
+  console.error('FAIL - erros de página/console inesperados:\n  ' + problems.join('\n  '));
 }
 await browser.close();
 server.close();

@@ -2,7 +2,7 @@
 // ffmpeg: ffmpeg-engine.js · formato de saída: export/ (trocável).
 import { MAX_CLIP_SECONDS, MIN_CLIP_SECONDS, formatTime, maxDuration, normalizeClip } from './clip.js';
 import { loadAudio, loadVisual } from './media.js';
-import { FfmpegEngine } from './ffmpeg-engine.js';
+import { EngineCancelledError, FfmpegEngine } from './ffmpeg-engine.js';
 import { defaultExporter } from './export/index.js';
 
 const $ = (id) => document.getElementById(id);
@@ -16,7 +16,7 @@ const el = {
   visualStart: $('visual-start'), visualStartOut: $('visual-start-out'),
   audioStart: $('audio-start'), audioStartOut: $('audio-start-out'),
   duration: $('duration'), durationOut: $('duration-out'),
-  previewBtn: $('preview-btn'), generateBtn: $('generate-btn'),
+  previewBtn: $('preview-btn'), generateBtn: $('generate-btn'), cancelBtn: $('cancel-btn'),
   progress: $('progress'), status: $('status'),
   resultSection: $('result-section'), resultVideo: $('result-video'),
   resultInfo: $('result-info'), downloadLink: $('download-link'),
@@ -236,6 +236,7 @@ el.generateBtn.addEventListener('click', async () => {
       el.progress.value = 0;
     }
     el.status.textContent = 'Gerando o mp4… (pode levar alguns segundos)';
+    el.cancelBtn.hidden = false;
     const t0 = performance.now();
     const out = await exporter.export({
       engine,
@@ -246,13 +247,20 @@ el.generateBtn.addEventListener('click', async () => {
     });
     showResult(out, clip, (performance.now() - t0) / 1000);
   } catch (e) {
-    showError(`Falha ao gerar: ${e.message}`);
-    el.status.textContent = '';
+    if (e instanceof EngineCancelledError) {
+      el.status.textContent = 'Cancelado.';
+    } else {
+      showError(`Falha ao gerar: ${e.message}`);
+      el.status.textContent = '';
+    }
   } finally {
+    el.cancelBtn.hidden = true;
     el.progress.hidden = true;
     setBusy(false);
   }
 });
+
+el.cancelBtn.addEventListener('click', () => engine.cancel());
 
 function showResult({ blob, filename }, clip, seconds) {
   if (state.resultUrl) URL.revokeObjectURL(state.resultUrl);
