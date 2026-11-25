@@ -65,4 +65,8 @@ test('formatTime', () => {
   assert.equal(formatTime(0), '0:00.0');
   assert.equal(formatTime(65.25), '1:05.3');
   assert.equal(formatTime(-1), '0:00.0');
+  // bordas de arredondamento: nunca "60" nos segundos
+  assert.equal(formatTime(59.96), '1:00.0');
+  assert.equal(formatTime(119.97), '2:00.0');
+  assert.equal(formatTime(9.99), '0:10.0');
 });

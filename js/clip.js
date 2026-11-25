@@ -38,7 +38,8 @@ export function normalizeClip({ visualDuration = null, audioDuration, visualStar
 
 /** Formata segundos como "m:ss.d" para exibir na UI. */
 export function formatTime(seconds) {
-  const s = Math.max(0, seconds);
+  // Arredonda para décimos ANTES de separar minutos (senão 59.96 vira "0:60.0").
+  const s = Math.round(Math.max(0, seconds) * 10) / 10;
   const m = Math.floor(s / 60);
   const rest = (s - m * 60).toFixed(1).padStart(4, '0');
   return `${m}:${rest}`;
