@@ -7,8 +7,8 @@
   "scripts": {
     "vendor": "node scripts/vendor.mjs",
     "serve": "node scripts/serve.mjs",
-    "test": "node --test test/unit",
-    "test:integration": "node --test test/integration",
+    "test": "node --test \"test/unit/*.test.js\"",
+    "test:integration": "node --test \"test/integration/*.test.js\"",
     "test:e2e": "node test/e2e/run.mjs"
   },
   "devDependencies": {

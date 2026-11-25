@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Figcomaudio — mp4 quadrado com áudio</title>
+  <meta name="description" content="Gera um mp4 512×512 de até 5 s com áudio, 100% no seu navegador.">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="page">
+    <h1>Figcomaudio</h1>
+    <p class="lead">Imagem ou vídeo + áudio → mp4 quadrado 512×512 de até 5&nbsp;s. Tudo roda no seu navegador; nada é enviado a servidor.</p>
+  </header>
+
+  <main class="page">
+    <p id="alert" class="alert" role="alert" hidden></p>
+
+    <section aria-labelledby="h-files">
+      <h2 id="h-files"><span class="n">1</span> Arquivos</h2>
+      <div class="grid">
+        <div class="card">
+          <label for="visual-input" class="field-label">Vídeo ou imagem</label>
+          <input id="visual-input" type="file" accept="video/*,image/*">
+          <div class="square" id="visual-box" aria-live="polite">
+            <span class="placeholder">Pré-visualização 1:1<br>(é assim que será recortado)</span>
+          </div>
+          <p class="hint" id="visual-info">GIF é tratado como imagem (só o primeiro quadro). O áudio do vídeo é ignorado.</p>
+        </div>
+        <div class="card">
+          <label for="audio-input" class="field-label">Áudio</label>
+          <input id="audio-input" type="file" accept="audio/*">
+          <audio id="audio-player" controls hidden></audio>
+          <p class="hint" id="audio-info">mp3, m4a, wav, ogg…</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-clip" id="clip-section" class="disabled">
+      <h2 id="h-clip"><span class="n">2</span> Trecho (até 5 s)</h2>
+      <div class="card">
+        <div class="row" id="visual-start-row">
+          <label for="visual-start">Início no vídeo</label>
+          <input id="visual-start" type="range" min="0" max="0" step="0.1" value="0">
+          <output id="visual-start-out" for="visual-start">0:00.0</output>
+        </div>
+        <div class="row">
+          <label for="audio-start">Início no áudio</label>
+          <input id="audio-start" type="range" min="0" max="0" step="0.1" value="0">
+          <output id="audio-start-out" for="audio-start">0:00.0</output>
+        </div>
+        <div class="row">
+          <label for="duration">Duração</label>
+          <input id="duration" type="range" min="0.5" max="5" step="0.1" value="5">
+          <output id="duration-out" for="duration">5.0 s</output>
+        </div>
+        <div class="actions">
+          <button type="button" id="preview-btn" class="secondary">▶ Pré-ouvir trecho</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-gen" id="gen-section" class="disabled">
+      <h2 id="h-gen"><span class="n">3</span> Gerar</h2>
+      <div class="card">
+        <div class="actions">
+          <button type="button" id="generate-btn" disabled>Gerar mp4 512×512</button>
+          <button type="button" id="cancel-btn" class="secondary" hidden>Cancelar</button>
+        </div>
+        <progress id="progress" max="1" value="0" hidden></progress>
+        <p class="hint" id="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-result" id="result-section" hidden>
+      <h2 id="h-result"><span class="n">4</span> Resultado</h2>
+      <div class="card">
+        <div class="square"><video id="result-video" controls playsinline loop></video></div>
+        <p class="hint" id="result-info"></p>
+        <div class="actions">
+          <a id="download-link" class="button" download="figcomaudio.mp4">⬇ Baixar mp4</a>
+          <button type="button" id="share-btn" class="secondary" hidden>📤 Compartilhar / salvar no celular</button>
+        </div>
+        <details class="howto" open>
+          <summary>Como importar pelo “Criar figurinha” do WhatsApp</summary>
+          <ol>
+            <li>Leve o mp4 para a galeria do celular:
+              <ul>
+                <li><strong>Android:</strong> toque em “Baixar mp4”; o arquivo costuma ir para Downloads e aparecer na galeria.</li>
+                <li><strong>iPhone:</strong> toque em “Compartilhar / salvar no celular” → “Salvar vídeo”. Se usar “Baixar”, o arquivo provavelmente vai para o app Arquivos; abra-o lá → compartilhar → “Salvar vídeo”.</li>
+                <li><strong>Computador:</strong> baixe e envie o arquivo para o celular.</li>
+              </ul>
+            </li>
+            <li>No WhatsApp, abra uma conversa, toque no campo de mensagem → ícone de emoji/figurinhas e procure a opção de <strong>criar figurinha</strong> (o nome e o lugar variam por versão e plataforma).</li>
+            <li>Escolha o vídeo na galeria, ajuste o enquadramento e confirme.</li>
+            <li>Envie a figurinha para si mesmo e confira se <strong>o áudio tocou</strong>.</li>
+          </ol>
+          <p class="warn">Atenção: este roteiro é aproximado e <strong>não foi validado</strong>. Figurinhas do WhatsApp provavelmente <strong>não carregam áudio</strong> — esta é justamente a hipótese que esta página existe para testar (veja o README). Anote o resultado em <code>docs/resultados.md</code>.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="page">
+    <p>Projeto experimental · ffmpeg.wasm · <a href="README.md">README (hipótese e riscos)</a></p>
+  </footer>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
