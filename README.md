@@ -1,8 +1,9 @@
 # Figcomaudio
 
-Página web estática (HTML + CSS + JS puro, sem backend, nada para instalar) que recebe uma imagem ou vídeo
-e um áudio, deixa escolher um trecho de **até 5 s** e gera um **mp4 quadrado 512×512
-com o áudio embutido**, usando [ffmpeg.wasm](https://ffmpegwasm.netlify.app/).
+Página web estática (HTML + CSS + JS puro, sem backend, nada para instalar) que recebe um
+**vídeo com som**, deixa escolher um trecho de **até 5 s** e gera um **mp4 quadrado 512×512
+com o som do próprio vídeo**, pronto para virar figurinha com som no WhatsApp, usando
+[ffmpeg.wasm](https://ffmpegwasm.netlify.app/).
 Tudo roda no navegador: nenhum arquivo é enviado a servidor.
 
 **Usar online:** https://victorfaria-dev.github.io/Figcomaudio/ (publicado automaticamente
@@ -10,40 +11,49 @@ a partir da branch `main`; ver "Publicação" abaixo).
 
 ## Hipótese a validar
 
-> **H1.** Um mp4 512×512 (H.264 + AAC, ≤ 5 s) importado pelo fluxo "Criar figurinha"
-> do WhatsApp **mantém o áudio** e é aceito como figurinha.
+Contexto (pesquisa de 25/11/2026, fontes secundárias, sem anúncio oficial da Meta): o WhatsApp
+começou a liberar **figurinhas com som** aos poucos, principalmente no Brasil, por volta de
+24/11/2026. Receber parece funcionar para muitos; **criar** ainda está restrito. Relatos dizem que
+figurinhas animadas feitas de vídeo mantêm ~5 s do som original.
 
-Este projeto existe para **testar H1 barato**, não para presumir que ela é verdadeira.
+> **H1.** Um mp4 512×512 (H.264 + AAC, ≤ 5 s) gerado por esta página, importado no criador
+> de figurinhas do WhatsApp, vira figurinha **com o som preservado**.
+>
+> **H2.** Existe um jeito de uma página web entregar a figurinha com som **pronta** ao
+> WhatsApp (botão "Adicionar ao WhatsApp"), inclusive para quem ainda não tem o recurso de criar.
 
 ### O que sabemos e o que não sabemos
 
 | Afirmação | Status |
 |---|---|
-| ffmpeg.wasm gera mp4 512×512 H.264+AAC no navegador | Verificável aqui (testes automatizados deste repo) |
-| O mp4 gerado toca com áudio em players comuns | Verificável aqui |
-| O WhatsApp aceita esse mp4 no "Criar figurinha" | **Não verificado** |
-| O WhatsApp preserva o áudio na figurinha resultante | **Não verificado — provavelmente falsa** (ver R1) |
+| A página gera mp4 512×512 H.264+AAC com o som do vídeo | Verificado (testes deste repo) |
+| WhatsApp aceita esse mp4 no criador e mantém o som (H1) | **Não verificado** |
+| Página web consegue adicionar figurinha ao WhatsApp (H2) | **Provavelmente não** (ver R1) |
+| Formato interno da figurinha com som | **Desconhecido** (não há documentação pública) |
 
 ### Experimento (checklist manual, ~10 min, não precisa saber programar)
 
-1. No celular, abra o link "Usar online" acima. Escolha uma foto e um áudio com **voz
-   falando** (som inconfundível) e gere um mp4 de 3 s.
+1. No celular, abra o link "Usar online" acima. Escolha um vídeo com **voz falando** (som
+   inconfundível) e gere uma figurinha de 3 s.
 2. Salve na galeria ("Compartilhar / salvar no celular" ou "Baixar") e tente importar pelo
    "Criar figurinha" do WhatsApp (Android e iPhone, se tiver acesso aos dois).
 3. Registrar para cada plataforma/versão do WhatsApp: (a) aceitou o arquivo? (b) virou
    figurinha animada? (c) **o áudio sobreviveu**? (d) enviada a um contato, toca com som?
-4. Se (c) = não em todas as plataformas, H1 está **refutada** para o fluxo atual; a página
-   continua útil só como gerador de mp4 quadrado com áudio (para status, Reels etc.), e a
-   camada de exportação (abaixo) é o ponto de troca caso a API oficial passe a suportar áudio.
+4. Se (c) = não em todas as plataformas, H1 está **refutada** para o fluxo atual.
+5. Para H2: com uma figurinha com som **recebida** de alguém, no Android, pegar o arquivo dela e
+   inspecionar o formato (ffprobe). Sem saber o formato, não dá para gerá-lo; e mesmo sabendo,
+   ainda falta um caminho para entregá-lo ao WhatsApp como figurinha (R1). A camada de exportação
+   (abaixo) é o ponto de troca se isso se mostrar possível.
 
 Registre os resultados em [`docs/resultados.md`](docs/resultados.md).
 
 ## Riscos
 
-- **R1 — Figurinhas do WhatsApp provavelmente não têm áudio.** Pelo que consta na
-  documentação oficial de figurinhas (formato WebP, 512×512, animada ≤ 500 KB e ≤ 10 s) não
-  há faixa de áudio. Esta documentação **não foi reverificada** ao escrever este README:
-  confirmar na fonte oficial antes de qualquer decisão. É o risco que pode invalidar H1.
+- **R1 — Página web não adiciona figurinha ao WhatsApp.** O caminho oficial para terceiros
+  adicionarem figurinhas é a API de pacotes, que exige **app nativo** (Android/iOS), pacotes de
+  3 a 30 figurinhas WebP ([WhatsApp/stickers](https://github.com/WhatsApp/stickers)), e não há
+  sinal público de que ela aceite som. Não existe API web para isso. É o risco que pode
+  inviabilizar H2.
 - **R2 — Fluxo "Criar figurinha" muda por versão/plataforma.** As instruções na página são
   um roteiro aproximado, não verificado em todas as versões.
 - **R3 — Tamanho do arquivo.** O limite de 500 KB é de figurinha animada WebP; para mp4
@@ -59,7 +69,7 @@ Registre os resultados em [`docs/resultados.md`](docs/resultados.md).
 - **R7 — Compatibilidade do navegador.** Requer Web Workers com módulos (ES modules) e
   WebAssembly. A página lê duração/dimensões com `<video>`/`<audio>` nativos: um arquivo que o
   *navegador* não decodifica (ex.: HEVC no Chrome/Linux) é recusado mesmo que o ffmpeg o
-  aceitasse. GIF é tratado como imagem (só o primeiro quadro).
+  aceitasse.
 - **R8 — Licença do núcleo.** O pacote `@ffmpeg/core` declara MIT, mas embute FFmpeg e
   libx264, cujas licenças (LGPL/GPL) se aplicam ao binário wasm. **Não verificado**; conferir
   antes de distribuir publicamente o site com o `vendor/` incluído.
@@ -72,12 +82,12 @@ css/styles.css
 js/
   main.js             orquestra a UI (única parte que toca o DOM de ponta a ponta)
   clip.js             regras puras do trecho (duração máx., limites) — testável em Node
-  media.js            leitura de arquivos e duração (vídeo/áudio/imagem)
+  media.js            leitura do vídeo e da duração
   ffmpeg-engine.js    carrega e executa o ffmpeg.wasm (worker, WORKERFS, timeout, cancelar)
   export/
     index.js          registro de exportadores
     mp4-args.js       monta os argumentos do ffmpeg (puro, testável)
-    mp4-square.js     exportador atual: mp4 512×512 com áudio
+    mp4-square.js     exportador atual: mp4 512×512 com o som do vídeo
     sticker-pack.js   STUB: pacote de figurinhas (futuro, quando a API suportar áudio)
 ```
 
@@ -91,7 +101,7 @@ A UI nunca chama o ffmpeg diretamente: ela chama um **exportador** que obedece a
   id: 'mp4-square',
   label: 'MP4 quadrado 512×512',
   available: true,
-  async export({ engine, visual, audio, clip, onProgress }) {
+  async export({ engine, video, clip, onProgress }) {
     return { blob, filename, mime };
   }
 }
@@ -129,8 +139,9 @@ npm run test:e2e          # navegador real (Playwright) com o ffmpeg.wasm
 ## Estado da validação (o que foi realmente executado)
 
 - Unitários e integração (ffmpeg do sistema + ffprobe): passam, inclusive o caso de PNG
-  transparente e a verificação de que o áudio vem do arquivo de áudio (por frequência).
-- E2E em Chromium (Playwright) com ffmpeg.wasm real: vídeo→mp4 e imagem→mp4 (512×512,
+  transparente, vídeo sem som (recusado) e a verificação, por frequência, de que o som de
+  saída é o do próprio vídeo.
+- E2E em Chromium (Playwright) com ffmpeg.wasm real: vídeo→mp4 com o som do próprio vídeo (512×512,
   H.264+AAC, duração pedida, conferido com ffprobe no arquivo baixado), cancelamento,
   timeout, corrida ao trocar de arquivo, limpeza após arquivo inválido, compartilhar
   (com `navigator.share` simulado). O e2e reprova se houver erro de console.
@@ -144,4 +155,4 @@ npm run test:e2e          # navegador real (Playwright) com o ffmpeg.wasm
 - Trecho máximo: 5 s. Saída: 512×512, 30 fps, H.264 (yuv420p) + AAC estéreo 44,1 kHz.
 - Recorte quadrado centralizado (cobre o quadro; as bordas são cortadas).
 - Áreas transparentes (PNG de figurinha) viram fundo branco: mp4/H.264 não tem transparência.
-- O áudio do vídeo de entrada é ignorado; vale só o arquivo de áudio escolhido.
+- Só vídeo (imagem não tem som). O som é obrigatório: vídeo sem som é recusado com mensagem clara.
