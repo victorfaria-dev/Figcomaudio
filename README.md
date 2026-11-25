@@ -5,6 +5,9 @@ e um áudio, deixa escolher um trecho de **até 5 s** e gera um **mp4 quadrado 5
 com o áudio embutido**, usando [ffmpeg.wasm](https://ffmpegwasm.netlify.app/).
 Tudo roda no navegador: nenhum arquivo é enviado a servidor.
 
+**Usar online:** https://victorfaria-dev.github.io/Figcomaudio/ (publicado automaticamente
+a partir da branch `main`; ver "Publicação" abaixo).
+
 ## Hipótese a validar
 
 > **H1.** Um mp4 512×512 (H.264 + AAC, ≤ 5 s) importado pelo fluxo "Criar figurinha"
@@ -21,10 +24,12 @@ Este projeto existe para **testar H1 barato**, não para presumir que ela é ver
 | O WhatsApp aceita esse mp4 no "Criar figurinha" | **Não verificado** |
 | O WhatsApp preserva o áudio na figurinha resultante | **Não verificado — provavelmente falsa** (ver R1) |
 
-### Experimento (checklist manual, ~10 min)
+### Experimento (checklist manual, ~10 min, não precisa saber programar)
 
-1. Gerar um mp4 de 3 s com áudio inconfundível (ex.: voz falando) pelo app.
-2. Passá-lo ao celular e tentar importar pelo "Criar figurinha" (Android e iOS, se possível).
+1. No celular, abra o link "Usar online" acima. Escolha uma foto e um áudio com **voz
+   falando** (som inconfundível) e gere um mp4 de 3 s.
+2. Salve na galeria ("Compartilhar / salvar no celular" ou "Baixar") e tente importar pelo
+   "Criar figurinha" do WhatsApp (Android e iPhone, se tiver acesso aos dois).
 3. Registrar para cada plataforma/versão do WhatsApp: (a) aceitou o arquivo? (b) virou
    figurinha animada? (c) **o áudio sobreviveu**? (d) enviada a um contato, toca com som?
 4. Se (c) = não em todas as plataformas, H1 está **refutada** para o fluxo atual; o app
@@ -44,8 +49,9 @@ Registre os resultados em [`docs/resultados.md`](docs/resultados.md).
 - **R3 — Tamanho do arquivo.** O limite de 500 KB é de figurinha animada WebP; para mp4
   não sabemos o limite efetivo. O app mostra o tamanho do resultado para medirmos.
 - **R4 — Memória/desempenho do ffmpeg.wasm.** A versão single-thread roda em worker, é
-  lenta e limitada pela memória do navegador; arquivos grandes de entrada podem falhar,
-  sobretudo em celulares. Por isso há um limite de tamanho de entrada.
+  lenta e limitada pela memória do navegador. As entradas são lidas via WORKERFS (sem copiar
+  o arquivo inteiro para o wasm), há limite de 200 MB por entrada, timeout de 180 s e botão
+  Cancelar. O consumo real de memória em celulares **não foi medido**.
 - **R5 — Dependência de CDN / peso.** O núcleo wasm tem ~31 MB. Está vendorizado no
   repositório para funcionar offline e sem depender de CDN, ao custo de um repositório maior.
 - **R6 — Direitos autorais.** Áudio e imagens de terceiros podem ter direitos reservados;
@@ -67,7 +73,7 @@ js/
   main.js             orquestra a UI (única parte que toca o DOM de ponta a ponta)
   clip.js             regras puras do trecho (duração máx., limites) — testável em Node
   media.js            leitura de arquivos e duração (vídeo/áudio/imagem)
-  ffmpeg-engine.js    carrega e executa o ffmpeg.wasm (worker)
+  ffmpeg-engine.js    carrega e executa o ffmpeg.wasm (worker, WORKERFS, timeout, cancelar)
   export/
     index.js          registro de exportadores
     mp4-args.js       monta os argumentos do ffmpeg (puro, testável)
@@ -105,6 +111,13 @@ npm run serve       # http://localhost:8080
 
 (Não abrir via `file://`: módulos ES e workers exigem http.)
 
+## Publicação
+
+`.github/workflows/pages.yml` publica no GitHub Pages a cada push na `main`. Configuração
+única no GitHub: **Settings → Pages → Build and deployment → Source: "GitHub Actions"**.
+`.github/workflows/ci.yml` roda os testes unitários e de integração em cada PR e confere se
+`vendor/` corresponde ao `package-lock.json`.
+
 ## Testes
 
 ```bash
@@ -115,12 +128,16 @@ npm run test:e2e          # navegador real (Playwright) com o ffmpeg.wasm
 
 ## Estado da validação (o que foi realmente executado)
 
-- Unitários (24) e integração com ffmpeg do sistema (5): passam.
-- E2E em Chromium (Playwright) com ffmpeg.wasm real: vídeo→mp4 e imagem→mp4 geram
-  512×512, H.264+AAC, duração pedida; o arquivo baixado foi inspecionado com ffprobe.
+- Unitários e integração (ffmpeg do sistema + ffprobe): passam, inclusive o caso de PNG
+  transparente e a verificação de que o áudio vem do arquivo de áudio (por frequência).
+- E2E em Chromium (Playwright) com ffmpeg.wasm real: vídeo→mp4 e imagem→mp4 (512×512,
+  H.264+AAC, duração pedida, conferido com ffprobe no arquivo baixado), cancelamento,
+  timeout, corrida ao trocar de arquivo, limpeza após arquivo inválido, compartilhar
+  (com `navigator.share` simulado). O e2e reprova se houver erro de console.
 - Nos testes, mídia sintética (`testsrc`) comprime muito (~50–90 KB); **não** representa o
-  tamanho de filmagens reais — meça com seus arquivos (R3).
-- **Não testado:** importação no WhatsApp (H1), Safari/Firefox, celulares.
+  tamanho de filmagens reais. Meça com seus arquivos (R3).
+- O e2e não roda no CI (depende do Playwright instalado na máquina); rodar localmente.
+- **Não testado:** importação no WhatsApp (H1), Safari/Firefox, celulares reais, Web Share real.
 
 ## Limites assumidos
 
