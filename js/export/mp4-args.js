@@ -60,5 +60,13 @@ export function buildMp4Args({ inputName, outputName, clip, size = OUTPUT_SIZE, 
   ];
 }
 
-/** O log do ffmpeg indica que o vídeo não tem faixa de som? */
-export const isMissingAudioError = (text) => /0:a:0.*matches no streams|matches no streams.*0:a/i.test(text || '');
+/**
+ * O log do ffmpeg indica que o vídeo não tem faixa de som?
+ * A redação muda entre versões (ffmpeg 6: "Stream map '0:a:0' matches no streams";
+ * ffmpeg 8: "Stream map '' matches no streams" + "Failed to set value '0:a:0' for option 'map'"),
+ * por isso olha o texto todo: "matches no streams" junto com o map de som '0:a:0'.
+ */
+export function isMissingAudioError(text) {
+  const t = text || '';
+  return /matches no streams/i.test(t) && /'0:a:0'/.test(t);
+}

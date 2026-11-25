@@ -44,8 +44,15 @@ test('rejeita duração não positiva', () => {
 });
 
 test('isMissingAudioError reconhece o erro do ffmpeg', () => {
+  // ffmpeg 5/6 (inclui o ffmpeg.wasm 0.12)
   assert.equal(isMissingAudioError("Stream map '0:a:0' matches no streams."), true);
+  // ffmpeg 8: o nome do map some da 1ª linha e o '0:a:0' vem em outra linha
+  assert.equal(isMissingAudioError(
+    "Stream map '' matches no streams.\nTo ignore this, add a trailing '?' to the map.\n" +
+    "Failed to set value '0:a:0' for option 'map': Invalid argument"), true);
   assert.equal(isMissingAudioError('Conversion failed!'), false);
+  // falta de stream de VÍDEO não é "sem som"
+  assert.equal(isMissingAudioError("Stream specifier ':v:0' in filtergraph matches no streams."), false);
 });
 
 test('safeExt', () => {
