@@ -1,6 +1,6 @@
 // Registro de exportadores. A UI só conhece esta interface:
 //
-//   exporter = { id, label, available, export({ engine, visual, audio, clip, onProgress })
+//   exporter = { id, label, available, export({ engine, video, clip, onProgress })
 //                                          → Promise<{ blob, filename, mime }> }
 //
 // Para adicionar/trocar um formato, crie um módulo com esse contrato e registre aqui.
@@ -20,3 +20,4 @@ export function getExporter(id) {
 }
 
 export { ExportNotSupportedError } from './sticker-pack.js';
+export { MissingAudioError } from './mp4-square.js';

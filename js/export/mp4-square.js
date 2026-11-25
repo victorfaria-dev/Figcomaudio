@@ -1,40 +1,39 @@
-// Exportador atual: mp4 512×512 (H.264 + AAC) com o áudio embutido.
-import { buildMp4Args, safeExt } from './mp4-args.js';
+// Exportador atual: mp4 512×512 (H.264 + AAC) com o som do próprio vídeo.
+import { buildMp4Args, isMissingAudioError, safeExt } from './mp4-args.js';
+
+export class MissingAudioError extends Error {
+  constructor() {
+    super('Esse vídeo não tem som. Escolha um vídeo com áudio.');
+    this.name = 'MissingAudioError';
+  }
+}
 
 export const mp4SquareExporter = {
   id: 'mp4-square',
-  label: 'MP4 quadrado 512×512 com áudio',
+  label: 'MP4 quadrado 512×512 com som',
   available: true,
 
   /**
    * @param {object} p
-   * @param {{run:Function, inputPath:Function}} p.engine  motor (ver ffmpeg-engine.js)
-   * @param {{kind:'video'|'image', file:File}} p.visual
-   * @param {{file:File}} p.audio
-   * @param {{visualStart:number, audioStart:number, duration:number}} p.clip
+   * @param {{run:Function, inputPath:Function, lastLog?:string}} p.engine  motor (ver ffmpeg-engine.js)
+   * @param {{file:File}} p.video
+   * @param {{start:number, duration:number}} p.clip
    * @param {(p:number)=>void} [p.onProgress]
    * @returns {Promise<{blob:Blob, filename:string, mime:string}>}
    */
-  async export({ engine, visual, audio, clip, onProgress }) {
-    const visualName = `visual.${safeExt(visual.file.name, visual.kind === 'image' ? 'png' : 'mp4')}`;
-    const audioName = `audio.${safeExt(audio.file.name, 'mp3')}`;
+  async export({ engine, video, clip, onProgress }) {
+    const inputName = `video.${safeExt(video.file.name, 'mp4')}`;
     const outputName = 'out.mp4';
+    const args = buildMp4Args({ inputName: engine.inputPath(inputName), outputName, clip });
 
-    const args = buildMp4Args({
-      visualKind: visual.kind,
-      visualName: engine.inputPath(visualName),
-      audioName: engine.inputPath(audioName),
-      outputName,
-      clip,
-    });
-    // Passa o File em si (sem ler para a memória): o motor monta com WORKERFS.
-    const bytes = await engine.run({
-      inputs: { [visualName]: visual.file, [audioName]: audio.file },
-      args,
-      outputName,
-      onProgress,
-    });
-
-    return { blob: new Blob([bytes], { type: 'video/mp4' }), filename: 'figcomaudio.mp4', mime: 'video/mp4' };
+    let bytes;
+    try {
+      // Passa o File em si (sem ler para a memória): o motor monta com WORKERFS.
+      bytes = await engine.run({ inputs: { [inputName]: video.file }, args, outputName, onProgress });
+    } catch (e) {
+      if (isMissingAudioError(`${e.message}\n${engine.lastLog ?? ''}`)) throw new MissingAudioError();
+      throw e;
+    }
+    return { blob: new Blob([bytes], { type: 'video/mp4' }), filename: 'figurinha.mp4', mime: 'video/mp4' };
   },
 };
