@@ -126,4 +126,5 @@ npm run test:e2e          # navegador real (Playwright) com o ffmpeg.wasm
 
 - Trecho máximo: 5 s. Saída: 512×512, 30 fps, H.264 (yuv420p) + AAC estéreo 44,1 kHz.
 - Recorte quadrado centralizado (cobre o quadro; as bordas são cortadas).
+- Áreas transparentes (PNG de figurinha) viram fundo branco: mp4/H.264 não tem transparência.
 - O áudio do vídeo de entrada é ignorado; vale só o arquivo de áudio escolhido.

@@ -28,6 +28,8 @@ before(() => {
   run(['-f', 'lavfi', '-i', 'testsrc=size=360x640:rate=25:duration=8', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', join(dir, 'tall.mp4')]);
   // áudio de 12 s
   run(['-f', 'lavfi', '-i', 'sine=frequency=880:duration=12', '-y', join(dir, 'in.mp3')]);
+  // PNG 100% transparente cuja cor "escondida" é vermelha (caso típico de figurinha)
+  run(['-f', 'lavfi', '-i', 'color=c=red@0.0:s=300x200,format=rgba', '-frames:v', '1', '-y', join(dir, 'transp.png')]);
   // imagem retangular
   run(['-f', 'lavfi', '-i', 'testsrc=size=500x333:rate=1:duration=1', '-frames:v', '1', '-y', join(dir, 'in.png')]);
 });
@@ -80,6 +82,14 @@ test('o áudio vem do arquivo de áudio (880 Hz), não do vídeo (220 Hz)', opts
   for (let i = 1; i < samples.length; i++) if (samples[i - 1] < 0 !== samples[i] < 0) crossings++;
   const hz = crossings / 2 / (samples.length / 44100);
   assert.ok(Math.abs(hz - 880) < 40, `frequência estimada ${hz.toFixed(0)} Hz ≈ 880`);
+});
+
+test('PNG transparente vira fundo branco (não a cor escondida nos pixels transparentes)', opts, () => {
+  exportWith('image', 'transp.png', { visualStart: 0, audioStart: 0, duration: 1 }, 'f.mp4');
+  const px = execFileSync('ffmpeg', ['-v', 'error', '-i', join(dir, 'f.mp4'), '-frames:v', '1',
+    '-vf', 'crop=w=2:h=2:x=255:y=255,format=rgb24', '-f', 'rawvideo', '-']);
+  const [r, g, b] = px;
+  assert.ok(r > 235 && g > 235 && b > 235, `pixel central deveria ser branco, veio rgb(${r},${g},${b})`);
 });
 
 test('tamanho do arquivo é razoável (< 1 MB para 5 s)', opts, () => {

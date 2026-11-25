@@ -25,18 +25,27 @@ test('imagem: usa -loop 1 e não usa -ss na entrada visual', () => {
 test('mapeia vídeo só da entrada 0 e áudio só da entrada 1 (ignora áudio do vídeo)', () => {
   const a = buildMp4Args({ ...base, visualKind: 'video' });
   const maps = a.flatMap((x, i) => (x === '-map' ? [a[i + 1]] : []));
-  assert.deepEqual(maps, ['0:v:0', '1:a:0']);
+  assert.deepEqual(maps, ['[v]', '1:a:0']);
+  assert.match(after(a, '-filter_complex'), /\[0:v\]/, 'o vídeo do grafo vem só da entrada 0');
 });
 
 test('saída 512x512, 30 fps, yuv420p, H.264 + AAC', () => {
   const a = buildMp4Args({ ...base, visualKind: 'video' });
-  const vf = after(a, '-vf');
+  const vf = after(a, '-filter_complex');
   assert.match(vf, /scale=512:512/);
   assert.match(vf, /fps=30/);
   assert.match(vf, /format=yuv420p/);
   assert.equal(after(a, '-c:v'), 'libx264');
   assert.equal(after(a, '-c:a'), 'aac');
   assert.equal(a.at(-1), 'out.mp4');
+});
+
+test('fundo sólido atrás da imagem (transparência não vaza)', () => {
+  const g = after(buildMp4Args({ ...base, visualKind: 'image' }), '-filter_complex');
+  assert.match(g, /color=c=white:s=512x512/);
+  assert.match(g, /overlay/);
+  const g2 = after(buildMp4Args({ ...base, visualKind: 'image', background: 'black' }), '-filter_complex');
+  assert.match(g2, /color=c=black/);
 });
 
 test('duração de saída limitada ao trecho', () => {
