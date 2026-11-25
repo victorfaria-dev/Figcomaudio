@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar ffmpeg (testes de integração)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: npm ci
+      - name: Unitários
+        run: npm test
+      - name: Integração (ffmpeg do sistema)
+        run: npm run test:integration
+      - name: vendor/ está em dia com package-lock
+        run: |
+          npm run vendor
+          git diff --exit-code -- vendor/ || (echo "::error::vendor/ desatualizado: rode npm run vendor e faça commit" && exit 1)
