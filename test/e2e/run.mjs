@@ -93,6 +93,42 @@ await scenario('imagem + áudio → mp4 512x512 de 2 s', async () => {
   checkSquareWithAudio(info, 2);
 });
 
+await scenario('corrida: vídeo (lento) e logo depois imagem (rápida) → vence a última escolha', async () => {
+  await page.evaluate(() => {
+    // dispara as duas escolhas sem esperar a primeira terminar de carregar
+    window.__pick = (input, files) => {
+      const dt = new DataTransfer();
+      files.forEach((f) => dt.items.add(f));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change'));
+    };
+  });
+  const toFile = async (path, name, type) => {
+    const b64 = (await import('node:fs')).readFileSync(path).toString('base64');
+    return { b64, name, type };
+  };
+  const vid = await toFile(join(dir, 'clip.webm'), 'clip.webm', 'video/webm');
+  const pic = await toFile(join(dir, 'pic.png'), 'pic.png', 'image/png');
+  await page.evaluate(([v, p]) => {
+    const mk = (o) => new File([Uint8Array.from(atob(o.b64), (c) => c.charCodeAt(0))], o.name, { type: o.type });
+    const input = document.getElementById('visual-input');
+    window.__pick(input, [mk(v)]);
+    window.__pick(input, [mk(p)]);
+  }, [vid, pic]);
+  await page.waitForTimeout(2500); // tempo de sobra para o vídeo (mais lento) terminar de carregar
+  assert.match(await page.textContent('#visual-info'), /pic\.png/);
+  assert.equal(await page.$eval('#visual-preview', (e) => e.tagName), 'IMG');
+  assert.equal(await page.isHidden('#visual-start-row'), true);
+});
+
+await scenario('escolha inválida limpa o estado (sem arquivo "fantasma")', async () => {
+  await page.setInputFiles('#visual-input', join(dir, 'tone.ogg')); // áudio no campo de imagem
+  await page.waitForSelector('#alert:not([hidden])');
+  assert.equal(await page.$('#visual-preview'), null, 'prévia antiga deve sumir');
+  assert.doesNotMatch(await page.textContent('#visual-info'), /pic\.png/);
+  assert.equal(await page.isDisabled('#generate-btn'), true);
+});
+
 await page.screenshot({ path: join(dir, 'final.png'), fullPage: true });
 if (problems.length) {
   // erros de console esperados: o Chromium de teste não toca H.264/AAC do resultado

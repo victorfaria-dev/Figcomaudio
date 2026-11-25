@@ -39,17 +39,47 @@ function showError(message) {
 const clearError = () => { el.alert.hidden = true; el.alert.textContent = ''; };
 
 // ---------- carregar arquivos ----------
+// Regra: o estado SEMPRE reflete o que o campo mostra.
+//  - "A última escolha vence": cada escolha ganha um número; um carregamento que termina
+//    depois de uma escolha mais nova é descartado (evita corrida ao trocar de arquivo rápido).
+//  - Escolha inválida ou cancelada limpa o estado (não fica um arquivo antigo "fantasma").
+const VISUAL_HINT = el.visualInfo.textContent;
+const AUDIO_HINT = el.audioInfo.textContent;
+const VISUAL_PLACEHOLDER = el.visualBox.innerHTML;
+let visualReq = 0;
+let audioReq = 0;
+
+function clearVisual() {
+  if (state.visual) URL.revokeObjectURL(state.visual.url);
+  state.visual = null;
+  el.visualBox.innerHTML = VISUAL_PLACEHOLDER;
+  el.visualInfo.textContent = VISUAL_HINT;
+}
+
+function clearAudio() {
+  if (state.audio) URL.revokeObjectURL(state.audio.url);
+  state.audio = null;
+  el.audioPlayer.removeAttribute('src');
+  el.audioPlayer.load();
+  el.audioPlayer.hidden = true;
+  el.audioInfo.textContent = AUDIO_HINT;
+}
+
 el.visualInput.addEventListener('change', async () => {
+  const req = ++visualReq;
   const file = el.visualInput.files[0];
-  if (!file) return;
   clearError();
   stopPreview();
+  if (!file) { clearVisual(); return refresh(); }
   try {
     const media = await loadVisual(file);
-    if (state.visual) URL.revokeObjectURL(state.visual.url);
+    if (req !== visualReq) return URL.revokeObjectURL(media.url); // chegou uma escolha mais nova
+    clearVisual();
     state.visual = { file, ...media };
     renderVisual();
   } catch (e) {
+    if (req !== visualReq) return;
+    clearVisual();
     el.visualInput.value = '';
     showError(e.message);
   }
@@ -57,18 +87,22 @@ el.visualInput.addEventListener('change', async () => {
 });
 
 el.audioInput.addEventListener('change', async () => {
+  const req = ++audioReq;
   const file = el.audioInput.files[0];
-  if (!file) return;
   clearError();
   stopPreview();
+  if (!file) { clearAudio(); return refresh(); }
   try {
     const media = await loadAudio(file);
-    if (state.audio) URL.revokeObjectURL(state.audio.url);
+    if (req !== audioReq) return URL.revokeObjectURL(media.url);
+    clearAudio();
     state.audio = { file, ...media };
     el.audioPlayer.src = state.audio.url;
     el.audioPlayer.hidden = false;
     el.audioInfo.textContent = `${file.name} · ${formatTime(media.duration)}`;
   } catch (e) {
+    if (req !== audioReq) return;
+    clearAudio();
     el.audioInput.value = '';
     showError(e.message);
   }
@@ -179,6 +213,7 @@ function refresh() {
   el.clipSection.classList.toggle('disabled', !ready || state.busy);
   el.genSection.classList.toggle('disabled', !ready);
   if (ready) syncClip();
+  else state.clip = null;
   el.generateBtn.disabled = !ready || state.busy || !state.clip?.valid;
 }
 
