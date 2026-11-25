@@ -1,20 +1,16 @@
-// Orquestração da UI. Regras de trecho: clip.js · leitura de mídia: media.js ·
+// Orquestração da UI. Regras de trecho: clip.js · leitura do vídeo: media.js ·
 // ffmpeg: ffmpeg-engine.js · formato de saída: export/ (trocável).
 import { MAX_CLIP_SECONDS, MIN_CLIP_SECONDS, formatTime, maxDuration, normalizeClip } from './clip.js';
-import { loadAudio, loadVisual } from './media.js';
+import { loadVideo } from './media.js';
 import { EngineCancelledError, FfmpegEngine } from './ffmpeg-engine.js';
 import { defaultExporter } from './export/index.js';
 
 const $ = (id) => document.getElementById(id);
 const el = {
   alert: $('alert'),
-  visualInput: $('visual-input'), audioInput: $('audio-input'),
-  visualBox: $('visual-box'), visualInfo: $('visual-info'),
-  audioPlayer: $('audio-player'), audioInfo: $('audio-info'),
+  videoInput: $('video-input'), videoBox: $('video-box'), videoInfo: $('video-info'),
   clipSection: $('clip-section'), genSection: $('gen-section'),
-  visualStartRow: $('visual-start-row'),
-  visualStart: $('visual-start'), visualStartOut: $('visual-start-out'),
-  audioStart: $('audio-start'), audioStartOut: $('audio-start-out'),
+  start: $('start'), startOut: $('start-out'),
   duration: $('duration'), durationOut: $('duration-out'),
   previewBtn: $('preview-btn'), generateBtn: $('generate-btn'), cancelBtn: $('cancel-btn'),
   progress: $('progress'), status: $('status'),
@@ -24,12 +20,11 @@ const el = {
 
 const engine = new FfmpegEngine();
 const state = {
-  visual: null, // { file, kind, url, duration, width, height }
-  audio: null,  // { file, url, duration }
-  clip: null,   // { visualStart, audioStart, duration, valid }
+  video: null, // { file, url, duration, width, height }
+  clip: null,  // { start, duration, valid }
   busy: false,
   resultUrl: null,
-  resultFile: null, // File do último resultado (para compartilhar)
+  resultFile: null,
 };
 
 // ---------- mensagens ----------
@@ -39,162 +34,97 @@ function showError(message) {
 }
 const clearError = () => { el.alert.hidden = true; el.alert.textContent = ''; };
 
-// ---------- carregar arquivos ----------
-// Regra: o estado SEMPRE reflete o que o campo mostra.
-//  - "A última escolha vence": cada escolha ganha um número; um carregamento que termina
-//    depois de uma escolha mais nova é descartado (evita corrida ao trocar de arquivo rápido).
-//  - Escolha inválida ou cancelada limpa o estado (não fica um arquivo antigo "fantasma").
-const VISUAL_HINT = el.visualInfo.textContent;
-const AUDIO_HINT = el.audioInfo.textContent;
-const VISUAL_PLACEHOLDER = el.visualBox.innerHTML;
-let visualReq = 0;
-let audioReq = 0;
+// ---------- carregar o vídeo ----------
+// O estado SEMPRE reflete o que o campo mostra:
+//  - "a última escolha vence" (um carregamento atrasado de uma escolha antiga é descartado);
+//  - escolha inválida ou cancelada limpa o estado (nada de arquivo "fantasma").
+const VIDEO_HINT = el.videoInfo.textContent;
+const VIDEO_PLACEHOLDER = el.videoBox.innerHTML;
+let videoReq = 0;
 
-function clearVisual() {
-  if (state.visual) URL.revokeObjectURL(state.visual.url);
-  state.visual = null;
-  el.visualBox.innerHTML = VISUAL_PLACEHOLDER;
-  el.visualInfo.textContent = VISUAL_HINT;
+function clearVideo() {
+  if (state.video) URL.revokeObjectURL(state.video.url);
+  state.video = null;
+  el.videoBox.innerHTML = VIDEO_PLACEHOLDER;
+  el.videoInfo.textContent = VIDEO_HINT;
 }
 
-function clearAudio() {
-  if (state.audio) URL.revokeObjectURL(state.audio.url);
-  state.audio = null;
-  el.audioPlayer.removeAttribute('src');
-  el.audioPlayer.load();
-  el.audioPlayer.hidden = true;
-  el.audioInfo.textContent = AUDIO_HINT;
-}
-
-el.visualInput.addEventListener('change', async () => {
-  const req = ++visualReq;
-  const file = el.visualInput.files[0];
+el.videoInput.addEventListener('change', async () => {
+  const req = ++videoReq;
+  const file = el.videoInput.files[0];
   clearError();
   stopPreview();
-  if (!file) { clearVisual(); return refresh(); }
+  if (!file) { clearVideo(); return refresh(); }
   try {
-    const media = await loadVisual(file);
-    if (req !== visualReq) return URL.revokeObjectURL(media.url); // chegou uma escolha mais nova
-    clearVisual();
-    state.visual = { file, ...media };
-    renderVisual();
+    const media = await loadVideo(file);
+    if (req !== videoReq) return URL.revokeObjectURL(media.url); // chegou uma escolha mais nova
+    clearVideo();
+    state.video = { file, ...media };
+    renderVideo();
   } catch (e) {
-    if (req !== visualReq) return;
-    clearVisual();
-    el.visualInput.value = '';
+    if (req !== videoReq) return;
+    clearVideo();
+    el.videoInput.value = '';
     showError(e.message);
   }
   refresh();
 });
 
-el.audioInput.addEventListener('change', async () => {
-  const req = ++audioReq;
-  const file = el.audioInput.files[0];
-  clearError();
-  stopPreview();
-  if (!file) { clearAudio(); return refresh(); }
-  try {
-    const media = await loadAudio(file);
-    if (req !== audioReq) return URL.revokeObjectURL(media.url);
-    clearAudio();
-    state.audio = { file, ...media };
-    el.audioPlayer.src = state.audio.url;
-    el.audioPlayer.hidden = false;
-    el.audioInfo.textContent = `${file.name} · ${formatTime(media.duration)}`;
-  } catch (e) {
-    if (req !== audioReq) return;
-    clearAudio();
-    el.audioInput.value = '';
-    showError(e.message);
-  }
-  refresh();
-});
-
-function renderVisual() {
-  const { kind, url, file, duration, width, height } = state.visual;
-  el.visualBox.replaceChildren();
-  let node;
-  if (kind === 'image') {
-    node = new Image();
-    node.alt = 'Pré-visualização da imagem';
-  } else {
-    node = document.createElement('video');
-    node.muted = true;
-    node.playsInline = true;
-    node.preload = 'auto';
-  }
-  node.src = url;
-  node.id = 'visual-preview';
-  el.visualBox.append(node);
-  el.visualInfo.textContent =
-    `${file.name} · ${width}×${height}` + (kind === 'video' ? ` · ${formatTime(duration)}` : ' · imagem');
+function renderVideo() {
+  const { url, file, duration, width, height } = state.video;
+  const v = document.createElement('video');
+  v.id = 'video-preview';
+  v.playsInline = true;
+  v.preload = 'auto';
+  v.src = url;
+  el.videoBox.replaceChildren(v);
+  el.videoInfo.textContent = `${file.name} · ${width}×${height} · ${formatTime(duration)}`;
 }
 
 // ---------- trecho ----------
-function readSliders() {
-  return {
-    visualStart: Number(el.visualStart.value),
-    audioStart: Number(el.audioStart.value),
-    duration: Number(el.duration.value),
-  };
-}
-
-/** Normaliza os sliders contra as durações reais e atualiza limites/rótulos. */
 function syncClip() {
-  if (!state.audio) return;
-  const vDur = state.visual?.kind === 'video' ? state.visual.duration : null;
-  const clip = normalizeClip({ visualDuration: vDur, audioDuration: state.audio.duration, ...readSliders() });
+  if (!state.video) return;
+  const total = state.video.duration;
+  const clip = normalizeClip({ videoDuration: total, start: Number(el.start.value), duration: Number(el.duration.value) });
   state.clip = clip;
 
-  const aMax = Math.max(0, state.audio.duration - MIN_CLIP_SECONDS);
-  el.audioStart.max = aMax.toFixed(2);
-  el.audioStart.value = clip.audioStart;
-  el.audioStartOut.textContent = formatTime(clip.audioStart);
+  el.start.max = Math.max(0, total - MIN_CLIP_SECONDS).toFixed(2);
+  el.start.value = clip.start;
+  el.startOut.textContent = formatTime(clip.start);
 
-  const isVideo = vDur !== null;
-  el.visualStartRow.hidden = !isVideo;
-  if (isVideo) {
-    el.visualStart.max = Math.max(0, vDur - MIN_CLIP_SECONDS).toFixed(2);
-    el.visualStart.value = clip.visualStart;
-    el.visualStartOut.textContent = formatTime(clip.visualStart);
-  }
-
-  const max = maxDuration({ visualDuration: vDur, visualStart: clip.visualStart, audioDuration: state.audio.duration, audioStart: clip.audioStart });
+  const max = maxDuration({ videoDuration: total, start: clip.start });
   el.duration.max = String(Math.min(MAX_CLIP_SECONDS, max));
   el.duration.min = String(Math.min(MIN_CLIP_SECONDS, max));
   el.duration.value = clip.duration;
   el.durationOut.textContent = `${clip.duration.toFixed(1)} s`;
 }
 
-for (const input of [el.visualStart, el.audioStart, el.duration]) {
+for (const input of [el.start, el.duration]) {
   input.addEventListener('input', () => { stopPreview(); syncClip(); });
 }
 
-// ---------- pré-ouvir o trecho (vídeo/imagem + áudio sincronizados) ----------
+// ---------- ver e ouvir o trecho (com o som do vídeo) ----------
 let previewRaf = 0;
 const isPreviewing = () => previewRaf !== 0;
 
 function stopPreview() {
   cancelAnimationFrame(previewRaf);
   previewRaf = 0;
-  el.audioPlayer.pause();
-  $('visual-preview')?.pause?.();
-  el.previewBtn.textContent = '▶ Pré-ouvir trecho';
+  $('video-preview')?.pause();
+  el.previewBtn.textContent = '▶ Ver e ouvir o trecho';
 }
 
 function startPreview() {
   const c = state.clip;
-  if (!c?.valid) return;
-  const video = state.visual?.kind === 'video' ? $('visual-preview') : null;
-  el.audioPlayer.currentTime = c.audioStart;
-  if (video) video.currentTime = c.visualStart;
-  const plays = [el.audioPlayer.play()];
-  if (video) plays.push(video.play());
-  Promise.all(plays).catch((e) => { stopPreview(); showError(`Não foi possível tocar a pré-visualização: ${e.message}`); });
+  const v = $('video-preview');
+  if (!c?.valid || !v) return;
+  v.muted = false;
+  v.currentTime = c.start;
+  v.play().catch((e) => { stopPreview(); showError(`Não foi possível tocar a pré-visualização: ${e.message}`); });
   el.previewBtn.textContent = '■ Parar';
-  const end = c.audioStart + c.duration;
+  const end = c.start + c.duration;
   const tick = () => {
-    if (el.audioPlayer.currentTime >= end || el.audioPlayer.ended) return stopPreview();
+    if (v.currentTime >= end || v.ended) return stopPreview();
     previewRaf = requestAnimationFrame(tick);
   };
   previewRaf = requestAnimationFrame(tick);
@@ -205,12 +135,12 @@ el.previewBtn.addEventListener('click', () => (isPreviewing() ? stopPreview() : 
 // ---------- gerar ----------
 function setBusy(busy) {
   state.busy = busy;
-  el.visualInput.disabled = el.audioInput.disabled = busy;
+  el.videoInput.disabled = busy;
   refresh();
 }
 
 function refresh() {
-  const ready = Boolean(state.visual && state.audio);
+  const ready = Boolean(state.video);
   el.clipSection.classList.toggle('disabled', !ready || state.busy);
   el.genSection.classList.toggle('disabled', !ready);
   if (ready) syncClip();
@@ -231,18 +161,17 @@ el.generateBtn.addEventListener('click', async () => {
   el.progress.value = 0;
   try {
     if (!engine.loaded) {
-      el.status.textContent = 'Carregando o ffmpeg.wasm (≈31 MB, só na primeira vez)…';
+      el.status.textContent = 'Carregando o gerador (≈31 MB, só na primeira vez)…';
       el.progress.removeAttribute('value'); // indeterminado
       await engine.load();
       el.progress.value = 0;
     }
-    el.status.textContent = 'Gerando o mp4… (pode levar alguns segundos)';
+    el.status.textContent = 'Gerando a figurinha… (pode levar alguns segundos)';
     el.cancelBtn.hidden = false;
     const t0 = performance.now();
     const out = await exporter.export({
       engine,
-      visual: { kind: state.visual.kind, file: state.visual.file },
-      audio: { file: state.audio.file },
+      video: { file: state.video.file },
       clip,
       onProgress: (p) => { el.progress.value = p; },
     });
@@ -251,7 +180,7 @@ el.generateBtn.addEventListener('click', async () => {
     if (e instanceof EngineCancelledError) {
       el.status.textContent = 'Cancelado.';
     } else {
-      showError(`Falha ao gerar: ${e.message}`);
+      showError(e.name === 'MissingAudioError' ? e.message : `Falha ao gerar: ${e.message}`);
       el.status.textContent = '';
     }
   } finally {
@@ -266,9 +195,9 @@ el.cancelBtn.addEventListener('click', () => engine.cancel());
 el.shareBtn.addEventListener('click', async () => {
   if (!state.resultFile) return;
   try {
-    await navigator.share({ files: [state.resultFile], title: 'Figcomaudio' });
+    await navigator.share({ files: [state.resultFile], title: 'Figurinha' });
   } catch (e) {
-    if (e.name !== 'AbortError') showError(`Não foi possível compartilhar: ${e.message}. Use “Baixar mp4”.`);
+    if (e.name !== 'AbortError') showError(`Não foi possível compartilhar: ${e.message}. Use “Baixar”.`);
   }
 });
 
@@ -278,7 +207,7 @@ function showResult({ blob, filename }, clip, seconds) {
   el.resultVideo.src = state.resultUrl;
   el.downloadLink.href = state.resultUrl;
   el.downloadLink.download = filename;
-  // Web Share com arquivos: no celular abre a folha de compartilhar ("Salvar vídeo", apps...).
+  // Web Share com arquivos: no celular abre a folha de compartilhar ("Salvar vídeo", WhatsApp...).
   state.resultFile = new File([blob], filename, { type: blob.type || 'video/mp4' });
   el.shareBtn.hidden = !(navigator.canShare?.({ files: [state.resultFile] }));
   const kb = blob.size / 1024;
