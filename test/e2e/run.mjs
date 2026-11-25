@@ -93,6 +93,22 @@ await scenario('imagem + áudio → mp4 512x512 de 2 s', async () => {
   checkSquareWithAudio(info, 2);
 });
 
+await scenario('compartilhar: oculto sem suporte; com suporte envia o mp4', async () => {
+  assert.equal(await page.isHidden('#share-btn'), true, 'Chromium headless não compartilha arquivos');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async ({ files }) => { window.__shared = `${files[0].name}|${files[0].type}|${files[0].size}`; },
+    });
+  });
+  await page.$eval('#duration', (e) => { e.value = '1'; e.dispatchEvent(new Event('input')); });
+  await generateAndDownload('share.mp4');
+  await page.click('#share-btn');
+  const shared = await page.evaluate(() => window.__shared);
+  assert.match(shared, /^figcomaudio\.mp4\|video\/mp4\|[1-9]\d+$/);
+});
+
 await scenario('cancelar no meio da geração para e permite gerar de novo', async () => {
   await page.$eval('#duration', (e) => { e.value = '5'; e.dispatchEvent(new Event('input')); });
   await page.click('#generate-btn');

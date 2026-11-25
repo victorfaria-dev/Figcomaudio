@@ -19,7 +19,7 @@ const el = {
   previewBtn: $('preview-btn'), generateBtn: $('generate-btn'), cancelBtn: $('cancel-btn'),
   progress: $('progress'), status: $('status'),
   resultSection: $('result-section'), resultVideo: $('result-video'),
-  resultInfo: $('result-info'), downloadLink: $('download-link'),
+  resultInfo: $('result-info'), downloadLink: $('download-link'), shareBtn: $('share-btn'),
 };
 
 const engine = new FfmpegEngine();
@@ -29,6 +29,7 @@ const state = {
   clip: null,   // { visualStart, audioStart, duration, valid }
   busy: false,
   resultUrl: null,
+  resultFile: null, // File do último resultado (para compartilhar)
 };
 
 // ---------- mensagens ----------
@@ -262,12 +263,24 @@ el.generateBtn.addEventListener('click', async () => {
 
 el.cancelBtn.addEventListener('click', () => engine.cancel());
 
+el.shareBtn.addEventListener('click', async () => {
+  if (!state.resultFile) return;
+  try {
+    await navigator.share({ files: [state.resultFile], title: 'Figcomaudio' });
+  } catch (e) {
+    if (e.name !== 'AbortError') showError(`Não foi possível compartilhar: ${e.message}. Use “Baixar mp4”.`);
+  }
+});
+
 function showResult({ blob, filename }, clip, seconds) {
   if (state.resultUrl) URL.revokeObjectURL(state.resultUrl);
   state.resultUrl = URL.createObjectURL(blob);
   el.resultVideo.src = state.resultUrl;
   el.downloadLink.href = state.resultUrl;
   el.downloadLink.download = filename;
+  // Web Share com arquivos: no celular abre a folha de compartilhar ("Salvar vídeo", apps...).
+  state.resultFile = new File([blob], filename, { type: blob.type || 'video/mp4' });
+  el.shareBtn.hidden = !(navigator.canShare?.({ files: [state.resultFile] }));
   const kb = blob.size / 1024;
   el.resultInfo.textContent =
     `512×512 · ${clip.duration.toFixed(1)} s · ${kb >= 1024 ? (kb / 1024).toFixed(2) + ' MB' : kb.toFixed(0) + ' KB'} · gerado em ${seconds.toFixed(1)} s`;
