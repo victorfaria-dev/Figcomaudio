@@ -57,8 +57,8 @@ input[type="file"] { width: 100%; }
 }
 .square > img, .square > video { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* mesmo fundo do mp4 (BACKGROUND_COLOR em mp4-args.js): a prévia mostra a transparência como ela sairá */
-#visual-box { background: #fff; }
-#visual-box .placeholder { color: #5b6270; }
+#video-box { background: #fff; }
+#video-box .placeholder { color: #5b6270; }
 .placeholder { color: #9aa1ae; font-size: .85rem; text-align: center; padding: 8px; }
 audio { width: 100%; margin-top: 10px; }
 

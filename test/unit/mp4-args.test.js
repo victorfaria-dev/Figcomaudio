@@ -1,66 +1,62 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMp4Args, safeExt } from '../../js/export/mp4-args.js';
+import { buildMp4Args, safeExt, isMissingAudioError } from '../../js/export/mp4-args.js';
 
-const clip = { visualStart: 1.5, audioStart: 10, duration: 4 };
-const base = { visualName: 'visual.mp4', audioName: 'audio.mp3', outputName: 'out.mp4', clip };
-
+const base = { inputName: 'in.mp4', outputName: 'out.mp4', clip: { start: 1.5, duration: 4 } };
 const after = (args, flag) => args[args.indexOf(flag) + 1];
 
-test('vídeo: -ss/-t antes de cada -i, com os inícios corretos', () => {
-  const a = buildMp4Args({ ...base, visualKind: 'video' });
-  const i1 = a.indexOf('visual.mp4');
-  const i2 = a.indexOf('audio.mp3');
-  assert.deepEqual(a.slice(i1 - 5, i1 + 1), ['-ss', '1.5', '-t', '4', '-i', 'visual.mp4']);
-  assert.deepEqual(a.slice(i2 - 5, i2 + 1), ['-ss', '10', '-t', '4', '-i', 'audio.mp3']);
+test('uma única entrada, com -ss/-t antes do -i', () => {
+  const a = buildMp4Args(base);
+  assert.deepEqual(a.slice(0, 6), ['-ss', '1.5', '-t', '4', '-i', 'in.mp4']);
+  assert.equal(a.filter((x) => x === '-i').length, 1);
 });
 
-test('imagem: usa -loop 1 e não usa -ss na entrada visual', () => {
-  const a = buildMp4Args({ ...base, visualName: 'visual.png', visualKind: 'image' });
-  const idx = a.indexOf('visual.png');
-  assert.deepEqual(a.slice(idx - 7, idx + 1), ['-loop', '1', '-framerate', '30', '-t', '4', '-i', 'visual.png']);
-  assert.ok(!a.slice(0, idx).includes('-ss'));
-});
-
-test('mapeia vídeo só da entrada 0 e áudio só da entrada 1 (ignora áudio do vídeo)', () => {
-  const a = buildMp4Args({ ...base, visualKind: 'video' });
+test('vídeo e som vêm do mesmo arquivo (som obrigatório)', () => {
+  const a = buildMp4Args(base);
   const maps = a.flatMap((x, i) => (x === '-map' ? [a[i + 1]] : []));
-  assert.deepEqual(maps, ['[v]', '1:a:0']);
-  assert.match(after(a, '-filter_complex'), /\[0:v\]/, 'o vídeo do grafo vem só da entrada 0');
+  assert.deepEqual(maps, ['[v]', '0:a:0']);
+  assert.ok(!maps.some((m) => m.endsWith('?')), 'som não pode ser opcional');
 });
 
 test('saída 512x512, 30 fps, yuv420p, H.264 + AAC', () => {
-  const a = buildMp4Args({ ...base, visualKind: 'video' });
-  const vf = after(a, '-filter_complex');
-  assert.match(vf, /scale=512:512/);
-  assert.match(vf, /fps=30/);
-  assert.match(vf, /format=yuv420p/);
+  const a = buildMp4Args(base);
+  const g = after(a, '-filter_complex');
+  assert.match(g, /scale=512:512/);
+  assert.match(g, /fps=30/);
+  assert.match(g, /format=yuv420p/);
   assert.equal(after(a, '-c:v'), 'libx264');
   assert.equal(after(a, '-c:a'), 'aac');
   assert.equal(a.at(-1), 'out.mp4');
 });
 
-test('fundo sólido atrás da imagem (transparência não vaza)', () => {
-  const g = after(buildMp4Args({ ...base, visualKind: 'image' }), '-filter_complex');
-  assert.match(g, /color=c=white:s=512x512/);
-  assert.match(g, /overlay/);
-  const g2 = after(buildMp4Args({ ...base, visualKind: 'image', background: 'black' }), '-filter_complex');
-  assert.match(g2, /color=c=black/);
+test('fundo sólido atrás do vídeo (transparência não vaza)', () => {
+  assert.match(after(buildMp4Args(base), '-filter_complex'), /color=c=white:s=512x512.*overlay/);
+  assert.match(after(buildMp4Args({ ...base, background: 'black' }), '-filter_complex'), /color=c=black/);
 });
 
 test('duração de saída limitada ao trecho', () => {
-  const a = buildMp4Args({ ...base, visualKind: 'video' });
+  const a = buildMp4Args(base);
   assert.equal(after(a.slice(a.indexOf('-movflags')), '-t'), '4');
 });
 
-test('rejeita tipo inválido e duração não positiva', () => {
-  assert.throws(() => buildMp4Args({ ...base, visualKind: 'gif' }));
-  assert.throws(() => buildMp4Args({ ...base, visualKind: 'video', clip: { ...clip, duration: 0 } }));
+test('rejeita duração não positiva', () => {
+  assert.throws(() => buildMp4Args({ ...base, clip: { start: 0, duration: 0 } }));
+});
+
+test('isMissingAudioError reconhece o erro do ffmpeg', () => {
+  // ffmpeg 5/6 (inclui o ffmpeg.wasm 0.12)
+  assert.equal(isMissingAudioError("Stream map '0:a:0' matches no streams."), true);
+  // ffmpeg 8: o nome do map some da 1ª linha e o '0:a:0' vem em outra linha
+  assert.equal(isMissingAudioError(
+    "Stream map '' matches no streams.\nTo ignore this, add a trailing '?' to the map.\n" +
+    "Failed to set value '0:a:0' for option 'map': Invalid argument"), true);
+  assert.equal(isMissingAudioError('Conversion failed!'), false);
+  // falta de stream de VÍDEO não é "sem som"
+  assert.equal(isMissingAudioError("Stream specifier ':v:0' in filtergraph matches no streams."), false);
 });
 
 test('safeExt', () => {
-  assert.equal(safeExt('Foto.JPG'), 'jpg');
+  assert.equal(safeExt('Video.MOV'), 'mov');
   assert.equal(safeExt('sem-extensao'), 'bin');
   assert.equal(safeExt('x.../..\\evil.mp4;rm'), 'bin');
-  assert.equal(safeExt('a.webm'), 'webm');
 });

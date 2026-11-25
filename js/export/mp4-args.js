@@ -3,7 +3,7 @@
 
 export const OUTPUT_SIZE = 512;
 export const OUTPUT_FPS = 30;
-/** Cor que aparece onde a imagem/vídeo é transparente (mp4/H.264 não tem canal alfa). */
+/** Cor que aparece onde o vídeo é transparente (mp4/H.264 não tem canal alfa). */
 export const BACKGROUND_COLOR = 'white';
 
 /** Extensão segura (a..z0..9, até 5 chars) para nomear arquivos no sistema de arquivos virtual. */
@@ -15,30 +15,19 @@ export function safeExt(filename, fallback = 'bin') {
 const sec = (n) => String(Math.round(n * 1000) / 1000);
 
 /**
+ * Vídeo e som vêm do MESMO arquivo. Se o vídeo não tiver som, o ffmpeg falha com
+ * "matches no streams" (o som é obrigatório: é o objetivo da figurinha).
+ *
  * @param {object} o
- * @param {'video'|'image'} o.visualKind
- * @param {string} o.visualName   nome no FS virtual
- * @param {string} o.audioName    nome no FS virtual
- * @param {string} o.outputName   nome no FS virtual (.mp4)
- * @param {{visualStart:number, audioStart:number, duration:number}} o.clip
+ * @param {string} o.inputName    caminho do vídeo no FS virtual
+ * @param {string} o.outputName   caminho de saída (.mp4)
+ * @param {{start:number, duration:number}} o.clip
  */
-export function buildMp4Args({ visualKind, visualName, audioName, outputName, clip, size = OUTPUT_SIZE, fps = OUTPUT_FPS, background = BACKGROUND_COLOR }) {
-  if (visualKind !== 'video' && visualKind !== 'image') throw new Error(`visualKind inválido: ${visualKind}`);
+export function buildMp4Args({ inputName, outputName, clip, size = OUTPUT_SIZE, fps = OUTPUT_FPS, background = BACKGROUND_COLOR }) {
   if (!(clip.duration > 0)) throw new Error('duração do trecho deve ser > 0');
-
   const d = sec(clip.duration);
 
-  const visualInput =
-    visualKind === 'video'
-      ? ['-ss', sec(clip.visualStart), '-t', d, '-i', visualName]
-      : ['-loop', '1', '-framerate', String(fps), '-t', d, '-i', visualName];
-
-  const audioInput = ['-ss', sec(clip.audioStart), '-t', d, '-i', audioName];
-
-  // Cobre o quadro: recorte quadrado centralizado, depois escala. Aspas simples são
-  // interpretadas pelo parser de filtros do ffmpeg (não por shell), então valem aqui.
-  // A imagem é sobreposta a um fundo sólido: sem isso, pixels transparentes (PNG de
-  // figurinha) mostrariam a cor "escondida" neles, que é imprevisível.
+  // Recorte quadrado centralizado, escala, e sobreposição a um fundo sólido (transparência não vaza).
   const fg = [
     `crop='min(iw,ih)':'min(iw,ih)'`,
     `scale=${size}:${size}:flags=lanczos`,
@@ -48,15 +37,14 @@ export function buildMp4Args({ visualKind, visualName, audioName, outputName, cl
   ].join(',');
   const graph =
     `color=c=${background}:s=${size}x${size}:r=${fps}[bg];` +
-    `[0:v]${fg}[fg];` +
+    `[0:v:0]${fg}[fg];` +
     `[bg][fg]overlay=shortest=1,format=yuv420p[v]`;
 
   return [
-    ...visualInput,
-    ...audioInput,
+    '-ss', sec(clip.start), '-t', d, '-i', inputName,
     '-filter_complex', graph,
     '-map', '[v]',
-    '-map', '1:a:0',
+    '-map', '0:a:0',
     '-c:v', 'libx264',
     '-preset', 'veryfast',
     '-profile:v', 'main',
@@ -70,4 +58,15 @@ export function buildMp4Args({ visualKind, visualName, audioName, outputName, cl
     '-y',
     outputName,
   ];
+}
+
+/**
+ * O log do ffmpeg indica que o vídeo não tem faixa de som?
+ * A redação muda entre versões (ffmpeg 6: "Stream map '0:a:0' matches no streams";
+ * ffmpeg 8: "Stream map '' matches no streams" + "Failed to set value '0:a:0' for option 'map'"),
+ * por isso olha o texto todo: "matches no streams" junto com o map de som '0:a:0'.
+ */
+export function isMissingAudioError(text) {
+  const t = text || '';
+  return /matches no streams/i.test(t) && /'0:a:0'/.test(t);
 }
