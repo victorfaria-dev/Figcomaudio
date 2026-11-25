@@ -51,7 +51,12 @@ Registre os resultados em [`docs/resultados.md`](docs/resultados.md).
 - **R6 — Direitos autorais.** Áudio e imagens de terceiros podem ter direitos reservados;
   responsabilidade de quem usa. O app não envia nada para fora do navegador.
 - **R7 — Compatibilidade do navegador.** Requer Web Workers com módulos (ES modules) e
-  WebAssembly; navegadores muito antigos não funcionam.
+  WebAssembly. O app lê duração/dimensões com `<video>`/`<audio>` nativos: um arquivo que o
+  *navegador* não decodifica (ex.: HEVC no Chrome/Linux) é recusado mesmo que o ffmpeg o
+  aceitasse. GIF é tratado como imagem (só o primeiro quadro).
+- **R8 — Licença do núcleo.** O pacote `@ffmpeg/core` declara MIT, mas embute FFmpeg e
+  libx264, cujas licenças (LGPL/GPL) se aplicam ao binário wasm. **Não verificado**; conferir
+  antes de distribuir publicamente o site com o `vendor/` incluído.
 
 ## Arquitetura
 
@@ -107,6 +112,15 @@ npm test                  # unitários (lógica pura)
 npm run test:integration  # roda o ffmpeg do sistema com os mesmos argumentos do app
 npm run test:e2e          # navegador real (Playwright) com o ffmpeg.wasm
 ```
+
+## Estado da validação (o que foi realmente executado)
+
+- Unitários (24) e integração com ffmpeg do sistema (5): passam.
+- E2E em Chromium (Playwright) com ffmpeg.wasm real: vídeo→mp4 e imagem→mp4 geram
+  512×512, H.264+AAC, duração pedida; o arquivo baixado foi inspecionado com ffprobe.
+- Nos testes, mídia sintética (`testsrc`) comprime muito (~50–90 KB); **não** representa o
+  tamanho de filmagens reais — meça com seus arquivos (R3).
+- **Não testado:** importação no WhatsApp (H1), Safari/Firefox, celulares.
 
 ## Limites assumidos
 
