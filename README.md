@@ -1,6 +1,6 @@
 # Figcomaudio
 
-Web app estático (HTML + CSS + JS puro, sem backend) que recebe uma imagem ou vídeo
+Página web estática (HTML + CSS + JS puro, sem backend, nada para instalar) que recebe uma imagem ou vídeo
 e um áudio, deixa escolher um trecho de **até 5 s** e gera um **mp4 quadrado 512×512
 com o áudio embutido**, usando [ffmpeg.wasm](https://ffmpegwasm.netlify.app/).
 Tudo roda no navegador: nenhum arquivo é enviado a servidor.
@@ -32,7 +32,7 @@ Este projeto existe para **testar H1 barato**, não para presumir que ela é ver
    "Criar figurinha" do WhatsApp (Android e iPhone, se tiver acesso aos dois).
 3. Registrar para cada plataforma/versão do WhatsApp: (a) aceitou o arquivo? (b) virou
    figurinha animada? (c) **o áudio sobreviveu**? (d) enviada a um contato, toca com som?
-4. Se (c) = não em todas as plataformas, H1 está **refutada** para o fluxo atual; o app
+4. Se (c) = não em todas as plataformas, H1 está **refutada** para o fluxo atual; a página
    continua útil só como gerador de mp4 quadrado com áudio (para status, Reels etc.), e a
    camada de exportação (abaixo) é o ponto de troca caso a API oficial passe a suportar áudio.
 
@@ -44,10 +44,10 @@ Registre os resultados em [`docs/resultados.md`](docs/resultados.md).
   documentação oficial de figurinhas (formato WebP, 512×512, animada ≤ 500 KB e ≤ 10 s) não
   há faixa de áudio. Esta documentação **não foi reverificada** ao escrever este README:
   confirmar na fonte oficial antes de qualquer decisão. É o risco que pode invalidar H1.
-- **R2 — Fluxo "Criar figurinha" muda por versão/plataforma.** As instruções no app são
+- **R2 — Fluxo "Criar figurinha" muda por versão/plataforma.** As instruções na página são
   um roteiro aproximado, não verificado em todas as versões.
 - **R3 — Tamanho do arquivo.** O limite de 500 KB é de figurinha animada WebP; para mp4
-  não sabemos o limite efetivo. O app mostra o tamanho do resultado para medirmos.
+  não sabemos o limite efetivo. A página mostra o tamanho do resultado para medirmos.
 - **R4 — Memória/desempenho do ffmpeg.wasm.** A versão single-thread roda em worker, é
   lenta e limitada pela memória do navegador. As entradas são lidas via WORKERFS (sem copiar
   o arquivo inteiro para o wasm), há limite de 200 MB por entrada, timeout de 180 s e botão
@@ -55,9 +55,9 @@ Registre os resultados em [`docs/resultados.md`](docs/resultados.md).
 - **R5 — Dependência de CDN / peso.** O núcleo wasm tem ~31 MB. Está vendorizado no
   repositório para funcionar offline e sem depender de CDN, ao custo de um repositório maior.
 - **R6 — Direitos autorais.** Áudio e imagens de terceiros podem ter direitos reservados;
-  responsabilidade de quem usa. O app não envia nada para fora do navegador.
+  responsabilidade de quem usa. A página não envia nada para fora do navegador.
 - **R7 — Compatibilidade do navegador.** Requer Web Workers com módulos (ES modules) e
-  WebAssembly. O app lê duração/dimensões com `<video>`/`<audio>` nativos: um arquivo que o
+  WebAssembly. A página lê duração/dimensões com `<video>`/`<audio>` nativos: um arquivo que o
   *navegador* não decodifica (ex.: HEVC no Chrome/Linux) é recusado mesmo que o ffmpeg o
   aceitasse. GIF é tratado como imagem (só o primeiro quadro).
 - **R8 — Licença do núcleo.** O pacote `@ffmpeg/core` declara MIT, mas embute FFmpeg e
