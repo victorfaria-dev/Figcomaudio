@@ -8,7 +8,7 @@ export const mp4SquareExporter = {
 
   /**
    * @param {object} p
-   * @param {{run:Function}} p.engine                  motor (ver ffmpeg-engine.js)
+   * @param {{run:Function, inputPath:Function}} p.engine  motor (ver ffmpeg-engine.js)
    * @param {{kind:'video'|'image', file:File}} p.visual
    * @param {{file:File}} p.audio
    * @param {{visualStart:number, audioStart:number, duration:number}} p.clip
@@ -20,12 +20,16 @@ export const mp4SquareExporter = {
     const audioName = `audio.${safeExt(audio.file.name, 'mp3')}`;
     const outputName = 'out.mp4';
 
-    const args = buildMp4Args({ visualKind: visual.kind, visualName, audioName, outputName, clip });
+    const args = buildMp4Args({
+      visualKind: visual.kind,
+      visualName: engine.inputPath(visualName),
+      audioName: engine.inputPath(audioName),
+      outputName,
+      clip,
+    });
+    // Passa o File em si (sem ler para a memória): o motor monta com WORKERFS.
     const bytes = await engine.run({
-      inputs: {
-        [visualName]: new Uint8Array(await visual.file.arrayBuffer()),
-        [audioName]: new Uint8Array(await audio.file.arrayBuffer()),
-      },
+      inputs: { [visualName]: visual.file, [audioName]: audio.file },
       args,
       outputName,
       onProgress,

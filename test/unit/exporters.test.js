@@ -6,6 +6,7 @@ const fakeEngine = () => {
   const calls = [];
   return {
     calls,
+    inputPath: (name) => `/input/${name}`,
     async run(job) {
       calls.push(job);
       return new Uint8Array([0, 0, 0, 24, 102, 116, 121, 112]);
@@ -32,9 +33,9 @@ test('mp4-square: monta job para o motor e devolve {blob, filename, mime}', asyn
 
   const [job] = engine.calls;
   assert.deepEqual(Object.keys(job.inputs).sort(), ['audio.ogg', 'visual.mov']);
-  assert.equal(job.inputs['visual.mov'].length, 10);
+  assert.equal(job.inputs['visual.mov'], visual.file, 'passa o próprio File, sem copiar bytes');
   assert.equal(job.outputName, 'out.mp4');
-  assert.ok(job.args.includes('visual.mov') && job.args.includes('audio.ogg'));
+  assert.ok(job.args.includes('/input/visual.mov') && job.args.includes('/input/audio.ogg'));
   assert.equal(out.mime, 'video/mp4');
   assert.equal(out.filename, 'figcomaudio.mp4');
   assert.ok(out.blob instanceof Blob && out.blob.size === 8);
