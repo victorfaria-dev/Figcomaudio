@@ -1,0 +1,18 @@
+{
+  "name": "figcomaudio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gera mp4 quadrado 512x512 com áudio (até 5 s) 100% no navegador, via ffmpeg.wasm.",
+  "type": "module",
+  "scripts": {
+    "vendor": "node scripts/vendor.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test test/unit",
+    "test:integration": "node --test test/integration",
+    "test:e2e": "node test/e2e/run.mjs"
+  },
+  "devDependencies": {
+    "@ffmpeg/core": "0.12.6",
+    "@ffmpeg/ffmpeg": "0.12.10"
+  }
+}
